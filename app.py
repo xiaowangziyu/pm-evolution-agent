@@ -178,19 +178,36 @@ def load_knowledge_base():
 
 
 def load_user_knowledge_base(user_id):
-    """加载用户的知识库进度（会复制原始知识库的数据）"""
+    """加载用户的知识库进度（兼容旧数据迁移）"""
     user_kb_path = os.path.join(BASE_DIR, f"kb_user_{user_id}.json")
+    
+    # 1. 先尝试加载新的用户隔离数据
     try:
         with open(user_kb_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        # 如果用户还没有进度，复制原始知识库
-        kb = load_knowledge_base()
-        # 给每个技能添加连续学习天数字段
-        for skill in kb["skills"]:
-            if "consecutive_days" not in skill:
-                skill["consecutive_days"] = 0
-        return kb
+        pass
+    
+    # 2. 如果新数据不存在，尝试查找旧的修改后的 knowledge_base.json
+    #（旧版本会直接修改原始 knowledge_base.json 保存进度）
+    # 先检查原始 knowledge_base.json 是否被修改过（有进度数据）
+    original_kb = load_knowledge_base()
+    has_old_progress = any(
+        any(kp.get("progress", 0) > 0 for kp in skill.get("knowledge_points", []))
+        for skill in original_kb.get("skills", [])
+    )
+    
+    if has_old_progress:
+        # 把旧进度迁移到用户新数据文件
+        save_user_knowledge_base(original_kb, user_id)
+        return original_kb
+    
+    # 3. 也没有旧进度数据，返回新的知识库副本
+    kb = load_knowledge_base()
+    for skill in kb["skills"]:
+        if "consecutive_days" not in skill:
+            skill["consecutive_days"] = 0
+    return kb
 
 
 def save_user_knowledge_base(kb, user_id):
@@ -201,13 +218,29 @@ def save_user_knowledge_base(kb, user_id):
 
 
 def load_log(user_id):
-    """加载用户的学习记录"""
+    """加载用户的学习记录（兼容旧数据迁移）"""
     user_log_path = os.path.join(BASE_DIR, f"log_user_{user_id}.json")
+    
+    # 1. 先尝试加载新的用户隔离数据
     try:
         with open(user_log_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"last_date": None, "history": []}
+        pass
+    
+    # 2. 如果新数据不存在，尝试加载旧的 learning_log.json 并迁移
+    old_log_path = os.path.join(BASE_DIR, "learning_log.json")
+    try:
+        with open(old_log_path, "r", encoding="utf-8") as f:
+            old_data = json.load(f)
+            # 迁移到用户新数据文件
+            save_log(old_data, user_id)
+            return old_data
+    except FileNotFoundError:
+        pass
+    
+    # 3. 也没有旧数据，返回新的空数据
+    return {"last_date": None, "history": []}
 
 
 def save_log(log, user_id):
