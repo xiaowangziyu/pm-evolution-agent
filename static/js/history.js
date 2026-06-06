@@ -1,12 +1,38 @@
 // 产品经理进化论 - 学习历史页逻辑
 
+// 生成/获取用户唯一ID
+function getUserId() {
+  let userId = localStorage.getItem('pm_evolution_user_id');
+  if (!userId) {
+    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    localStorage.setItem('pm_evolution_user_id', userId);
+  }
+  return userId;
+}
+
+const currentUserId = getUserId();
+
+// 封装 fetch 请求，自动带上 user_id
+async function fetchWithUserId(url, options = {}) {
+  const separator = url.includes('?') ? '&' : '?';
+  const urlWithUserId = `${url}${separator}user_id=${currentUserId}`;
+  
+  if (options.headers) {
+    options.headers['X-User-Id'] = currentUserId;
+  } else {
+    options.headers = { 'X-User-Id': currentUserId };
+  }
+  
+  return fetch(urlWithUserId, options);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
 });
 
 async function loadHistory() {
   try {
-    const resp = await fetch('/api/history');
+    const resp = await fetchWithUserId('/api/history');
     const data = await resp.json();
     renderStats(data);
     renderCalendar(data.grouped);

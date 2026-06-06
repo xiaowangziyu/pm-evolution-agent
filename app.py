@@ -138,27 +138,87 @@ def call_llm(prompt):
             return f"❌ API调用失败: {str(e)}"
 
 
+def get_user_id():
+    """从请求中获取 user_id"""
+    user_id = request.args.get('user_id')
+    if not user_id:
+        user_id = request.headers.get('X-User-Id')
+    if not user_id:
+        user_id = 'default_user'
+    # 清理文件名，只保留安全字符
+    return ''.join(c for c in user_id if c.isalnum() or c in '_-')
+
+
 def load_knowledge_base():
+    """加载原始知识库（只读）"""
     with open(KB_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_knowledge_base(kb):
-    with open(KB_PATH, "w", encoding="utf-8") as f:
+def load_user_knowledge_base(user_id):
+    """加载用户的知识库进度（会复制原始知识库的数据）"""
+    user_kb_path = os.path.join(BASE_DIR, f"kb_user_{user_id}.json")
+    try:
+        with open(user_kb_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # 如果用户还没有进度，复制原始知识库
+        kb = load_knowledge_base()
+        # 给每个技能添加连续学习天数字段
+        for skill in kb["skills"]:
+            if "consecutive_days" not in skill:
+                skill["consecutive_days"] = 0
+        return kb
+
+
+def save_user_knowledge_base(kb, user_id):
+    """保存用户的知识库进度"""
+    user_kb_path = os.path.join(BASE_DIR, f"kb_user_{user_id}.json")
+    with open(user_kb_path, "w", encoding="utf-8") as f:
         json.dump(kb, f, ensure_ascii=False, indent=2)
 
 
-def load_log():
+def load_log(user_id):
+    """加载用户的学习记录"""
+    user_log_path = os.path.join(BASE_DIR, f"log_user_{user_id}.json")
     try:
-        with open(LOG_PATH, "r", encoding="utf-8") as f:
+        with open(user_log_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"last_date": None, "history": [], "current_learning": None}
+        return {"last_date": None, "history": []}
 
 
-def save_log(log):
-    with open(LOG_PATH, "w", encoding="utf-8") as f:
+def save_log(log, user_id):
+    """保存用户的学习记录"""
+    user_log_path = os.path.join(BASE_DIR, f"log_user_{user_id}.json")
+    with open(user_log_path, "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
+
+
+def load_current_learning(user_id):
+    """加载用户的当前学习状态"""
+    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
+    try:
+        with open(current_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+
+def save_current_learning(data, user_id):
+    """保存用户的当前学习状态"""
+    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
+    with open(current_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def clear_current_learning(user_id):
+    """清除用户的当前学习状态"""
+    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
+    try:
+        os.remove(current_path)
+    except Exception:
+        pass
 
 
 def recalc_skill_avg(skill):
@@ -233,12 +293,13 @@ def history():
 @app.route("/api/today", methods=["GET"])
 def get_today():
     """获取今日学习内容"""
-    kb = load_knowledge_base()
-    log = load_log()
+    user_id = get_user_id()
+    kb = load_user_knowledge_base(user_id)
+    log = load_log(user_id)
     today = str(date.today())
 
     # 检查是否有正在进行的知识点（用户刷新页面时恢复）
-    current_learning = log.get("current_learning")
+    current_learning = load_current_learning(user_id)
     if current_learning:
         # 有正在进行的知识点，返回它（不重新生成）
         return jsonify({
@@ -262,7 +323,7 @@ def get_today():
     today_count = len(today_records)
 
     skill, kp = select_today_knowledge(kb)
-    save_knowledge_base(kb)
+    save_user_knowledge_base(kb, user_id)
 
     # 查找该知识点的历史学习记录
     previous_records = [
@@ -291,6 +352,7 @@ def get_today():
 @app.route("/api/knowledge", methods=["POST"])
 def get_knowledge():
     """生成知识点讲解"""
+    user_id = get_user_id()
     data = request.get_json()
     kp_name = data.get("knowledge_name", "")
     skill_name = data.get("skill_name", "")
@@ -345,8 +407,7 @@ def get_knowledge():
         text = text.lstrip()
 
     # 保存当前正在进行的知识点（用于刷新页面后恢复）
-    log = load_log()
-    log["current_learning"] = {
+    save_current_learning({
         "skill_name": skill_name,
         "skill_consecutive_days": skill_consecutive_days,
         "knowledge_name": kp_name,
@@ -356,8 +417,7 @@ def get_knowledge():
         "previous_weaknesses": previous_weaknesses,
         "previous_strengths": previous_strengths,
         "today_count": today_count
-    }
-    save_log(log)
+    }, user_id)
 
     return jsonify({"text": text, "is_iterative": is_iterative})
 
@@ -416,6 +476,7 @@ def get_custom_knowledge():
 @app.route("/api/question", methods=["POST"])
 def get_question():
     """生成练习题"""
+    user_id = get_user_id()
     data = request.get_json()
     kp_name = data.get("knowledge_name", "")
     skill_name = data.get("skill_name", "")
@@ -467,6 +528,13 @@ def get_question():
     else:
         question_part = text.strip()
 
+    # 获取当前学习状态并保存题目
+    current_data = load_current_learning(user_id) or {}
+    current_data["question"] = question_part
+    current_data["reference"] = reference_part
+    current_data["question_answered"] = False
+    save_current_learning(current_data, user_id)
+
     return jsonify({
         "question": question_part,
         "reference": reference_part,
@@ -477,6 +545,7 @@ def get_question():
 @app.route("/api/evaluate", methods=["POST"])
 def evaluate_answer():
     """评估用户答案"""
+    user_id = get_user_id()
     data = request.get_json()
     question = data.get("question", "")
     user_answer = data.get("user_answer", "")
@@ -534,6 +603,15 @@ def evaluate_answer():
     if weaknesses_match:
         weaknesses = [line.strip(' -*') for line in weaknesses_match.group(1).strip().split('\n') if line.strip()]
 
+    # 保存评估结果到当前学习状态
+    current_data = load_current_learning(user_id) or {}
+    current_data["score"] = score
+    current_data["eval_text"] = eval_text
+    current_data["strengths"] = strengths
+    current_data["weaknesses"] = weaknesses
+    current_data["summary"] = summary
+    save_current_learning(current_data, user_id)
+
     return jsonify({
         "eval_text": eval_text,
         "score": score,
@@ -546,6 +624,7 @@ def evaluate_answer():
 @app.route("/api/submit", methods=["POST"])
 def submit_learning():
     """提交今日学习结果（更新进度值、生成日记、记录历史）"""
+    user_id = get_user_id()
     data = request.get_json()
     skill_name = data.get("skill_name", "")
     knowledge_name = data.get("knowledge_name", "")
@@ -556,7 +635,7 @@ def submit_learning():
     weaknesses = data.get("weaknesses", [])
 
     # 更新进度值
-    kb = load_knowledge_base()
+    kb = load_user_knowledge_base(user_id)
     for skill in kb["skills"]:
         if skill["name"] == skill_name:
             for kp in skill["knowledge_points"]:
@@ -564,7 +643,7 @@ def submit_learning():
                     update_progress(kp, score)
             recalc_skill_avg(skill)
             break
-    save_knowledge_base(kb)
+    save_user_knowledge_base(kb, user_id)
 
     # 生成日记
     prompt = f"""基于以下信息写一篇详细的学习日记（第一人称，200-300字）
@@ -585,7 +664,7 @@ def submit_learning():
     diary = call_llm(prompt)
 
     # 记录历史
-    log = load_log()
+    log = load_log(user_id)
     today = str(date.today())
 
     # 检查今天是否是新的一天，重置计数
@@ -604,8 +683,8 @@ def submit_learning():
     })
 
     # 清除当前正在进行的知识点（学习完成）
-    log["current_learning"] = None
-    save_log(log)
+    clear_current_learning(user_id)
+    save_log(log, user_id)
 
     # 计算今日已学习数量
     today_count = len([r for r in log["history"] if r["date"] == today])
@@ -621,20 +700,21 @@ def submit_learning():
 @app.route("/api/current_learning", methods=["POST"])
 def update_current_learning():
     """更新当前学习进度（保存练习题状态）"""
+    user_id = get_user_id()
     data = request.get_json()
-    log = load_log()
+    current_data = load_current_learning(user_id) or {}
     
-    if log.get("current_learning"):
-        # 更新现有数据
-        if "knowledge_text" in data:
-            log["current_learning"]["knowledge_text"] = data["knowledge_text"]
-        if "question" in data:
-            log["current_learning"]["question"] = data["question"]
-        if "reference" in data:
-            log["current_learning"]["reference"] = data["reference"]
-        if "question_answered" in data:
-            log["current_learning"]["question_answered"] = data["question_answered"]
-        save_log(log)
+    # 更新现有数据
+    if "knowledge_text" in data:
+        current_data["knowledge_text"] = data["knowledge_text"]
+    if "question" in data:
+        current_data["question"] = data["question"]
+    if "reference" in data:
+        current_data["reference"] = data["reference"]
+    if "question_answered" in data:
+        current_data["question_answered"] = data["question_answered"]
+    
+    save_current_learning(current_data, user_id)
     
     return jsonify({"status": "success"})
 
@@ -642,14 +722,16 @@ def update_current_learning():
 @app.route("/api/progress", methods=["GET"])
 def get_progress():
     """获取技能进度数据"""
-    kb = load_knowledge_base()
+    user_id = get_user_id()
+    kb = load_user_knowledge_base(user_id)
     return jsonify(kb)
 
 
 @app.route("/api/history", methods=["GET"])
 def get_history():
     """获取学习历史（按日期分组）"""
-    log = load_log()
+    user_id = get_user_id()
+    log = load_log(user_id)
     history = log.get("history", [])
 
     # 按日期分组
