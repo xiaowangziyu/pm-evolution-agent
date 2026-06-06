@@ -37,6 +37,11 @@ env/
 
 # Data files (optional)
 learning_log.json
+kb_user_*.json
+log_user_*.json
+current_user_*.json
+logs/
+*.log
 
 # pm-skills-source (optional, it's a git submodule)
 pm-skills-source/

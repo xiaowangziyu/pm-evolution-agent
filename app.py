@@ -4,17 +4,32 @@
 import json
 import os
 import re
-from datetime import date
+import logging
+from datetime import datetime, date
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 import requests
 
 # ==================== 配置 ====================
+# 配置日志
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "app.log"), encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 API_KEY = os.getenv("ZHIPU_API_KEY", "")
-API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-MODEL = "glm-4-flash"
-MAX_CONSECUTIVE_DAYS = 3
+API_URL = os.getenv("API_URL", "https://open.bigmodel.cn/api/paas/v4/chat/completions")
+MODEL = os.getenv("MODEL", "glm-4-flash")
+MAX_CONSECUTIVE_DAYS = int(os.getenv("MAX_CONSECUTIVE_DAYS", 3))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_PATH = os.path.join(BASE_DIR, "knowledge_base.json")
@@ -22,9 +37,16 @@ LOG_PATH = os.path.join(BASE_DIR, "learning_log.json")
 
 app = Flask(__name__)
 
+# 添加请求日志中间件
+@app.before_request
+def log_request_info():
+    user_id = get_user_id()
+    logger.info(f"Request: {request.method} {request.path} | User: {user_id}")
+
 # ==================== 工具函数 ====================
 def call_llm(prompt):
     """调用智谱AI大模型"""
+    logger.info(f"Calling LLM, prompt length: {len(prompt)}")
     if not API_KEY:
         # 演示模式：返回模拟内容
         if "讲解" in prompt or "知识点" in prompt:
@@ -633,6 +655,8 @@ def submit_learning():
     summary = data.get("summary", "")
     strengths = data.get("strengths", [])
     weaknesses = data.get("weaknesses", [])
+    
+    logger.info(f"User {user_id} submitted learning: {knowledge_name}, score: {score}")
 
     # 更新进度值
     kb = load_user_knowledge_base(user_id)
