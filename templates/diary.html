@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学习日记 - 产品经理进化论</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="logo">🚀</div>
+        <span>产品经理进化论</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/">今日学习</a></li>
+        <li><a href="/progress">技能进度</a></li>
+        <li><a href="/history">学习历史</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="hero">
+      <h1>📝 学习日记</h1>
+      <p>记录你的每一次成长</p>
+    </div>
+
+    <div class="steps">
+      <div class="step-item completed">
+        <div class="step-num">1</div>
+        <div class="step-label">知识点</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item completed">
+        <div class="step-num">2</div>
+        <div class="step-label">练习题</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item completed">
+        <div class="step-num">3</div>
+        <div class="step-label">AI评估</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item active">
+        <div class="step-num">4</div>
+        <div class="step-label">学习日记</div>
+      </div>
+    </div>
+
+    <div id="main-content">
+      <div class="card">
+        <div class="card-title">
+          <span>⏳</span> 正在生成今日学习日记...
+        </div>
+        <div class="card-content">
+          <div class="loading" style="justify-content: center;">
+            <div class="spinner"></div>
+            <span>请稍候，正在生成学习日记...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      产品经理进化论 · AI驱动的个性化学习系统
+    </div>
+  </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            generateDiary();
+        });
+
+        async function generateDiary() {
+            const resultDataStr = sessionStorage.getItem('resultData');
+            if (!resultDataStr) {
+                showError('未找到学习数据，请返回首页重新开始');
+                return;
+            }
+
+            const resultData = JSON.parse(resultDataStr);
+
+            try {
+                const resp = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        skill_name: resultData.skill_name,
+                        knowledge_name: resultData.knowledge_name,
+                        score: resultData.score,
+                        eval_text: resultData.eval_text,
+                        summary: resultData.summary || '',
+                        strengths: resultData.strengths,
+                        weaknesses: resultData.weaknesses
+                    })
+                });
+                const data = await resp.json();
+
+                displayDiary(data, resultData);
+            } catch (error) {
+                showError('生成日记失败，请重试');
+            }
+        }
+
+        function displayDiary(data, resultData) {
+            const todayCount = data.today_count || 1;
+            
+            const content = `
+                <div class="card fade-in">
+                    <div class="card-title">
+                        <span>🎉</span> 本次学习完成！
+                    </div>
+                    <div class="card-content">
+                        <div style="text-align: center; margin-bottom: 1.5rem;">
+                            <span style="font-size: 5rem;">🎊</span>
+                        </div>
+                        <div style="padding: 1rem; background: #e0f2fe; border-radius: 8px; margin-bottom: 1.5rem; text-align: center;">
+                            <div style="font-size: 1.25rem; font-weight: 600;">今日已学习 <span style="color: #3b82f6;">${todayCount}</span> 个知识点</div>
+                        </div>
+                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f0fdf4; border-radius: 8px;">
+                            <div style="margin-bottom: 0.5rem;"><strong>📅 学习日期：</strong>${new Date().toLocaleDateString('zh-CN')}</div>
+                            <div style="margin-bottom: 0.5rem;"><strong>📚 技能领域：</strong>${resultData.skill_name}</div>
+                            <div style="margin-bottom: 0.5rem;"><strong>🎯 知识点：</strong>${resultData.knowledge_name}</div>
+                            <div style="margin-bottom: 0.5rem;"><strong>⭐ 得分：</strong>${resultData.score}/10</div>
+                        </div>
+                        <div style="padding: 1.25rem; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                            <strong>📝 学习日记</strong>
+                            <div style="margin-top: 0.75rem; line-height: 1.8;">${data.diary}</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="learnMore()">
+                        继续学习
+                    </button>
+                </div>
+                <div style="text-align: center; margin-top: 1rem;">
+                    <a href="/progress" class="btn btn-secondary" style="margin-right: 1rem;">
+                        查看进度
+                    </a>
+                    <a href="/history" class="btn btn-secondary">
+                        查看历史
+                    </a>
+                </div>
+            `;
+
+            document.getElementById('main-content').innerHTML = content;
+        }
+
+        function learnMore() {
+            sessionStorage.removeItem('evalData');
+            sessionStorage.removeItem('resultData');
+            window.location.href = '/';
+        }
+
+        function showError(message) {
+            document.getElementById('main-content').innerHTML = `
+                <div class="card fade-in">
+                    <div class="card-title">
+                        <span>❌</span> 出错了
+                    </div>
+                    <div class="card-content">
+                        <p style="color: #ef4444;">${message}</p>
+                        <div style="text-align: center; margin-top: 1.5rem;">
+                            <button class="btn btn-primary" onclick="goHome()">
+                                返回首页
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function goHome() {
+            sessionStorage.removeItem('evalData');
+            sessionStorage.removeItem('resultData');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

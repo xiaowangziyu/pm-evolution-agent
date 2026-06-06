@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚀 产品经理进化论 - 学习历史</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="logo">🚀</div>
+        <span>产品经理进化论</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/">今日学习</a></li>
+        <li><a href="/progress">技能进度</a></li>
+        <li><a href="/history" class="active">学习历史</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="hero">
+      <h1>学习进化<span>日记</span></h1>
+      <p>回顾你的每一步成长</p>
+    </div>
+
+    <div class="stats-grid" id="history-stats">
+      <div class="stat-card">
+        <div class="stat-value" id="h-stat-days">0</div>
+        <div class="stat-label">累计学习天数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="h-stat-duration">0分钟</div>
+        <div class="stat-label">总学习时长</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="h-stat-avg">0</div>
+        <div class="stat-label">平均得分</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="h-stat-max">0</div>
+        <div class="stat-label">最高得分</div>
+      </div>
+    </div>
+
+    <div class="history-layout">
+      <!-- 左侧：学习日记列表（7成） -->
+      <div class="history-main">
+        <div id="history-container">
+          <div class="card" style="text-align: center;">
+            <div class="loading" style="justify-content: center;">
+              <div class="spinner"></div>
+              <span>加载历史记录...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：日历（3成） -->
+      <div class="history-sidebar">
+        <div id="calendar-container" class="calendar-wrapper"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      产品经理进化论 · AI驱动的个性化学习系统
+    </div>
+  </div>
+
+  <script src="/static/js/history.js"></script>
+</body>
+</html>

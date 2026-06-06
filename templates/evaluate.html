@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI评估 - 产品经理进化论</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="logo">🚀</div>
+        <span>产品经理进化论</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/">今日学习</a></li>
+        <li><a href="/progress">技能进度</a></li>
+        <li><a href="/history">学习历史</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="hero">
+      <h1>📊 AI评估</h1>
+      <p>让AI为你的回答提供专业反馈</p>
+    </div>
+
+    <div class="steps">
+      <div class="step-item completed">
+        <div class="step-num">1</div>
+        <div class="step-label">知识点</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item completed">
+        <div class="step-num">2</div>
+        <div class="step-label">练习题</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item active">
+        <div class="step-num">3</div>
+        <div class="step-label">AI评估</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-label">学习日记</div>
+      </div>
+    </div>
+
+    <div id="main-content">
+      <div class="card">
+        <div class="card-title">
+          <span>⏳</span> AI正在评估你的答案...
+        </div>
+        <div class="card-content">
+          <div class="loading" style="justify-content: center;">
+            <div class="spinner"></div>
+            <span>请稍候，AI正在分析你的回答...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      产品经理进化论 · AI驱动的个性化学习系统
+    </div>
+  </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            evaluateAnswer();
+        });
+
+        async function evaluateAnswer() {
+            const evalDataStr = sessionStorage.getItem('evalData');
+            if (!evalDataStr) {
+                showError('未找到评估数据，请返回首页重新开始');
+                return;
+            }
+
+            const evalData = JSON.parse(evalDataStr);
+
+            try {
+                const resp = await fetch('/api/evaluate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        question: evalData.question,
+                        user_answer: evalData.user_answer,
+                        reference: evalData.reference
+                    })
+                });
+                const data = await resp.json();
+
+                const resultData = {
+                    ...evalData,
+                    score: data.score,
+                    eval_text: data.eval_text,
+                    strengths: data.strengths || [],
+                    weaknesses: data.weaknesses || [],
+                    summary: data.summary || ''
+                };
+
+                sessionStorage.setItem('resultData', JSON.stringify(resultData));
+
+                displayResult(data);
+            } catch (error) {
+                showError('评估失败，请重试');
+            }
+        }
+
+        function displayResult(data) {
+            const scoreColor = data.score >= 8 ? '#10b981' : data.score >= 6 ? '#f59e0b' : '#ef4444';
+            
+            // 从 eval_text 中提取建议部分
+            let suggestion = '';
+            if (data.eval_text && data.eval_text.includes('建议：')) {
+                const parts = data.eval_text.split('建议：');
+                if (parts.length > 1) {
+                    suggestion = parts[1].trim();
+                }
+            }
+            
+            const content = `
+                <div class="card fade-in">
+                    <div class="card-title">
+                        <span>📊</span> AI评估结果
+                    </div>
+                    <div class="card-content">
+                        <div style="text-align: center; margin-bottom: 1.5rem;">
+                            <div style="font-size: 4rem; font-weight: 800; color: ${scoreColor};">${data.score}/10</div>
+                            <div style="color: #64748b; margin-top: 0.5rem;">${getScoreComment(data.score)}</div>
+                        </div>
+                        ${data.summary ? `
+                            <div style="padding: 1rem; background: #f0fdf4; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #10b981;">
+                                <strong>💡 总结：</strong>${data.summary}
+                            </div>
+                        ` : ''}
+                        ${data.strengths && data.strengths.length > 0 ? `
+                            <div style="margin-bottom: 1rem;">
+                                <strong>✅ 达标之处：</strong>
+                                <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                                    ${data.strengths.map(s => `<li>${s}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${data.weaknesses && data.weaknesses.length > 0 ? `
+                            <div style="margin-bottom: 1rem;">
+                                <strong>📌 不足之处：</strong>
+                                <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                                    ${data.weaknesses.map(w => `<li>${w}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${suggestion ? `
+                            <div style="padding: 1rem; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                <strong>🎯 建议：</strong>${suggestion}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="goToDiary()">
+                        查看学习日记
+                    </button>
+                </div>
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button class="btn btn-secondary" onclick="goBack()">
+                        返回练习题
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('main-content').innerHTML = content;
+        }
+
+        function getScoreComment(score) {
+            if (score >= 9) return '太棒了！继续保持！';
+            if (score >= 8) return '优秀！表现出色！';
+            if (score >= 7) return '良好！还可以更好！';
+            if (score >= 6) return '及格！继续努力！';
+            return '加油！多练习会更好！';
+        }
+
+        function goToDiary() {
+            window.location.href = '/diary';
+        }
+
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        function showError(message) {
+            document.getElementById('main-content').innerHTML = `
+                <div class="card fade-in">
+                    <div class="card-title">
+                        <span>❌</span> 出错了
+                    </div>
+                    <div class="card-content">
+                        <p style="color: #ef4444;">${message}</p>
+                        <div style="text-align: center; margin-top: 1.5rem;">
+                            <button class="btn btn-primary" onclick="goBack()">
+                                返回首页
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚀 产品经理进化论 - 技能进度</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="logo">🚀</div>
+        <span>产品经理进化论</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/">今日学习</a></li>
+        <li><a href="/progress" class="active">技能进度</a></li>
+        <li><a href="/history">学习历史</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="hero">
+      <h1>技能进化<span>图谱</span></h1>
+      <p>追踪你的8大核心能力成长轨迹</p>
+    </div>
+
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-kp">0</div>
+        <div class="stat-label">知识点总数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-pass">0</div>
+        <div class="stat-label">已掌握</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-avg">0%</div>
+        <div class="stat-label">平均进度值</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-days">0</div>
+        <div class="stat-label">学习天数</div>
+      </div>
+    </div>
+
+    <div id="skills-container">
+      <div class="card" style="text-align: center;">
+        <div class="loading" style="justify-content: center;">
+          <div class="spinner"></div>
+          <span>加载进度数据...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      产品经理进化论 · AI驱动的个性化学习系统
+    </div>
+  </div>
+
+  <script src="/static/js/progress.js"></script>
+</body>
+</html>
+
