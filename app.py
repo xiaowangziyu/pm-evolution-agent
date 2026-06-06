@@ -750,7 +750,8 @@ def submit_learning():
         "status": "success",
         "diary": diary,
         "score": score,
-        "today_count": today_count
+        "today_count": today_count,
+        "date": today
     })
 
 

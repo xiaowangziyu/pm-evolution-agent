@@ -73,6 +73,16 @@
             generateDiary();
         });
 
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const weekDay = weekDays[date.getDay()];
+            return `${year}年${month}月${day}日 ${weekDay}`;
+        }
+
         async function generateDiary() {
             const resultDataStr = sessionStorage.getItem('resultData');
             if (!resultDataStr) {
@@ -120,29 +130,27 @@
                             <div style="font-size: 1.25rem; font-weight: 600;">今日已学习 <span style="color: #3b82f6;">${todayCount}</span> 个知识点</div>
                         </div>
                         <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f0fdf4; border-radius: 8px;">
-                            <div style="margin-bottom: 0.5rem;"><strong>📅 学习日期：</strong>${new Date().toLocaleDateString('zh-CN')}</div>
-                            <div style="margin-bottom: 0.5rem;"><strong>📚 技能领域：</strong>${resultData.skill_name}</div>
-                            <div style="margin-bottom: 0.5rem;"><strong>🎯 知识点：</strong>${resultData.knowledge_name}</div>
-                            <div style="margin-bottom: 0.5rem;"><strong>⭐ 得分：</strong>${resultData.score}/10</div>
-                        </div>
+                    <div style="margin-bottom: 0.5rem;"><strong>📅 学习日期：</strong>${formatDate(data.date)}</div>
+                    <div style="margin-bottom: 0.5rem;"><strong>📚 技能领域：</strong>${resultData.skill_name}</div>
+                    <div style="margin-bottom: 0.5rem;"><strong>🎯 知识点：</strong>${resultData.knowledge_name}</div>
+                    <div style="margin-bottom: 0.5rem;"><strong>⭐ 得分：</strong>${resultData.score}/10</div>
+                </div>
                         <div style="padding: 1.25rem; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
                             <strong>📝 学习日记</strong>
                             <div style="margin-top: 0.75rem; line-height: 1.8;">${data.diary}</div>
                         </div>
                     </div>
                 </div>
-                <div style="text-align: center; margin-top: 1.5rem;">
-                    <button class="btn btn-primary" onclick="learnMore()">
-                        继续学习
-                    </button>
-                </div>
-                <div style="text-align: center; margin-top: 1rem;">
-                    <a href="/progress" class="btn btn-secondary" style="margin-right: 1rem;">
+                <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem;">
+                    <a href="/progress" class="btn btn-secondary">
                         查看进度
                     </a>
                     <a href="/history" class="btn btn-secondary">
                         查看历史
                     </a>
+                    <button class="btn btn-primary" onclick="learnMore()">
+                        继续学习
+                    </button>
                 </div>
             `;
 
