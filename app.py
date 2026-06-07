@@ -161,13 +161,8 @@ def call_llm(prompt, temperature=0.7):
 
 
 def get_user_id():
-    """从请求中获取 user_id"""
-    user_id = request.args.get('user_id')
-    if not user_id:
-        user_id = request.headers.get('X-User-Id')
-    
-    logger.info(f"get_user_id called: args.user_id={request.args.get('user_id')}, headers.X-User-Id={request.headers.get('X-User-Id')}, final_user_id={user_id if user_id else 'default_user'}")
-    
+    """从请求 Header 中获取 user_id（只通过 Header 传递，避免 HTTPS 重定向丢失 URL 参数）"""
+    user_id = request.headers.get('X-User-Id')
     if not user_id:
         user_id = 'default_user'
     # 清理文件名，只保留安全字符

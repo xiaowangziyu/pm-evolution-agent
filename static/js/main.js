@@ -12,18 +12,14 @@ function getUserId() {
 
 const currentUserId = getUserId();
 
-// 封装 fetch 请求，自动带上 user_id
+// 封装 fetch 请求，自动带上 user_id（只通过 Header 传递，避免 HTTPS 重定向丢失 URL 参数）
 async function fetchWithUserId(url, options = {}) {
-  const separator = url.includes('?') ? '&' : '?';
-  const urlWithUserId = `${url}${separator}user_id=${currentUserId}`;
-  
   if (options.headers) {
     options.headers['X-User-Id'] = currentUserId;
   } else {
     options.headers = { 'X-User-Id': currentUserId };
   }
-  
-  return fetch(urlWithUserId, options);
+  return fetch(url, options);
 }
 
 let currentData = {
