@@ -44,9 +44,9 @@ def log_request_info():
     logger.info(f"Request: {request.method} {request.path} | User: {user_id}")
 
 # ==================== 工具函数 ====================
-def call_llm(prompt):
+def call_llm(prompt, temperature=0.7):
     """调用智谱AI大模型"""
-    logger.info(f"Calling LLM, prompt length: {len(prompt)}")
+    logger.info(f"Calling LLM, prompt length: {len(prompt)}, temperature: {temperature}")
     if not API_KEY:
         # 演示模式：返回模拟内容
         if "讲解" in prompt or "知识点" in prompt:
@@ -121,7 +121,7 @@ def call_llm(prompt):
     data = {
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7
+        "temperature": temperature
     }
 
     # 获取代理配置
@@ -323,6 +323,41 @@ def update_progress(kp, score):
     new_progress = (score / 10) * 100
     # 指数平滑：保留30%历史，70%新值
     kp["progress"] = round(kp["progress"] * 0.3 + new_progress * 0.7, 1)
+
+
+def get_recent_history(user_id, limit=5):
+    """获取用户最近的学习记录"""
+    log = load_log(user_id)
+    history = log.get("history", [])
+    # 按时间倒序，取最新的 limit 条
+    recent = history[-limit:] if len(history) > limit else history
+    return recent
+
+
+def format_history(history):
+    """格式化学习历史为可读字符串"""
+    if not history:
+        return "暂无学习记录"
+    lines = []
+    for i, record in enumerate(reversed(history), 1):  # 倒序，最新在前
+        line = f"{i}. {record['date']} - {record['knowledge']} - 得分 {record['score']}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def validate_recommendation(kb, recommendation):
+    """验证推荐的内容是否在知识库中"""
+    skill_name = recommendation.get("skill")
+    knowledge_point_name = recommendation.get("knowledge_point")
+    if not skill_name or not knowledge_point_name:
+        return False
+    # 检查是否存在该技能和知识点
+    for skill in kb.get("skills", []):
+        if skill["name"] == skill_name:
+            for kp in skill.get("knowledge_points", []):
+                if kp["name"] == knowledge_point_name:
+                    return True
+    return False
 
 
 # ==================== 页面路由 ====================
@@ -537,6 +572,7 @@ def get_question():
     skill_name = data.get("skill_name", "")
     custom_kp_name = data.get("custom_kp_name", kp_name)
     previous_weaknesses = data.get("previous_weaknesses", [])
+    difficulty = data.get("difficulty", "中等")  # 可选：容易/中等/困难
     
     # 从 knowledge_base.json 中查找该知识点的已有内容
     kb = load_knowledge_base()
@@ -559,16 +595,24 @@ def get_question():
     if kp_description:
         context_str += f"\n\n技能描述：{kp_description}"
 
+    # 根据难度调整提示词
+    if difficulty == "容易":
+        difficulty_str = "基础练习题（难度较低）"
+    elif difficulty == "困难":
+        difficulty_str = "进阶面试题（难度较高）"
+    else:  # 中等
+        difficulty_str = "练习题（难度适中）"
+    
     if previous_weaknesses:
-        # 有历史记录，迭代学习（方式二：基于新知识点生成练习题）
+        # 有历史记录，迭代学习
         prompt = (
-            f"基于知识点「{custom_kp_name}」，请出一道更有挑战性的产品经理面试题，并提供参考答案。"
+            f"基于知识点「{custom_kp_name}」，请出一道更有挑战性的产品经理{difficulty_str}，并提供参考答案。"
             f"输出格式：\n题目：\n参考答案：{context_str}"
         )
     else:
         # 首次学习
         prompt = (
-            f"基于知识点「{kp_name}」，请出一道产品经理练习题，并提供参考答案。"
+            f"基于知识点「{kp_name}」，请出一道产品经理{difficulty_str}，并提供参考答案。"
             f"输出格式：\n题目：\n参考答案：{context_str}"
         )
     text = call_llm(prompt)
@@ -777,6 +821,14 @@ def update_current_learning():
     return jsonify({"status": "success"})
 
 
+@app.route("/api/current_learning/clear", methods=["POST"])
+def clear_current_learning_api():
+    """清除当前学习状态"""
+    user_id = get_user_id()
+    clear_current_learning(user_id)
+    return jsonify({"status": "success"})
+
+
 @app.route("/api/progress", methods=["GET"])
 def get_progress():
     """获取技能进度数据"""
@@ -809,6 +861,92 @@ def get_history():
         "total_duration": total_duration,
         "total_count": len(history)
     })
+
+
+@app.route("/api/next_recommendation", methods=["POST"])
+def next_recommendation():
+    """根据用户学习历史，推荐下一个知识点和难度"""
+    user_id = get_user_id()
+    
+    # 1. 获取用户学习进度和最近答题记录
+    kb = load_user_knowledge_base(user_id)
+    recent_history = get_recent_history(user_id, limit=5)
+    
+    # 2. 构建结构化的技能进度信息
+    progress_text = []
+    for skill in kb["skills"]:
+        avg_prog = skill.get("avg_progress", 0)
+        kp_list = [f"{kp['name']}({kp.get('progress',0)}%)" for kp in skill["knowledge_points"]]
+        progress_text.append(f"- {skill['name']} (平均进度: {avg_prog}%)\n  知识点: {', '.join(kp_list)}")
+    progress_text = "\n".join(progress_text)
+    
+    # 3. 构建完整知识点列表，供 LLM 选择
+    available_knowledge = []
+    for skill in kb["skills"]:
+        for kp in skill["knowledge_points"]:
+            available_knowledge.append(f"{skill['name']} - {kp['name']}")
+    available_text = "\n".join(available_knowledge)
+    
+    # 4. 构建提示词
+    prompt = f"""你是一位资深产品经理导师。
+
+当前用户各技能进度：
+{progress_text}
+
+可用的技能和知识点列表（必须从下面选择）：
+{available_text}
+
+用户最近5次学习记录（最新在前）：
+{format_history(recent_history)}
+
+要求：
+1. 仅从「可用的技能和知识点列表」中选择，绝对不要推荐不存在的！
+2. 难度选择标准：
+   - 容易：该知识点进度 < 50%
+   - 中等：50-80%
+   - 困难：> 80%
+3. 请按以下 JSON 格式输出，不要任何其他内容：
+{{
+    "skill": "技能名",
+    "knowledge_point": "知识点名",
+    "difficulty": "容易/中等/困难",
+    "reason": "简短理由"
+}}"""
+    
+    # 5. 调用 LLM（低温度）
+    try:
+        logger.info(f"Calling LLM for next recommendation for user {user_id}")
+        response = call_llm(prompt, temperature=0.3)
+        
+        # 6. 清理响应中的 markdown 标记
+        clean_response = response.replace("```json", "").replace("```", "").strip()
+        recommendation = json.loads(clean_response)
+        
+        # 7. 验证推荐的内容是否在知识库中
+        if not validate_recommendation(kb, recommendation):
+            raise ValueError(f"推荐的内容不在知识库中: {recommendation}")
+        
+        logger.info(f"LLM recommendation successful: {recommendation}")
+    except Exception as e:
+        # Fallback：使用原硬编码规则
+        logger.warning(f"LLM recommendation failed: {e}, falling back to hardcoded rules")
+        skill, kp = select_today_knowledge(kb)
+        # 根据进度判断难度
+        if kp["progress"] < 50:
+            difficulty = "容易"
+        elif kp["progress"] < 80:
+            difficulty = "中等"
+        else:
+            difficulty = "困难"
+        recommendation = {
+            "skill": skill["name"],
+            "knowledge_point": kp["name"],
+            "difficulty": difficulty,
+            "reason": f"使用默认规则（LLM返回异常）"
+        }
+        logger.info(f"Fallback recommendation: {recommendation}")
+    
+    return jsonify(recommendation)
 
 
 @app.route("/evaluate", methods=["GET"])

@@ -127,7 +127,8 @@ async function preloadQuestion(useCache = false) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         knowledge_name: currentData.knowledgeName,
-        previous_weaknesses: currentData.previousWeaknesses
+        previous_weaknesses: currentData.previousWeaknesses,
+        difficulty: currentData.difficulty || "中等"
       })
     });
     const data = await resp.json();
@@ -467,7 +468,8 @@ async function loadQuestion() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         knowledge_name: currentData.knowledgeName,
-        previous_weaknesses: currentData.previousWeaknesses
+        previous_weaknesses: currentData.previousWeaknesses,
+        difficulty: currentData.difficulty || "中等"
       })
     });
     const data = await resp.json();
@@ -588,9 +590,74 @@ async function completeLearning() {
   }
 }
 
-function learnMore() {
-  // 重新加载今日学习内容
-  initPage();
+async function learnMore() {
+  // 调用 LLM 推荐接口获取下一个知识点
+  const mainContent = document.getElementById('main-content');
+  mainContent.innerHTML = `
+    <div class="card fade-in">
+      <div class="card-content">
+        <div class="loading" style="justify-content: center; padding: 3rem 0;">
+          <div class="spinner"></div>
+          <span>正在为你推荐下一个知识点...</span>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  try {
+    const resp = await fetchWithUserId('/api/next_recommendation', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    });
+    const recommendation = await resp.json();
+    
+    // 更新当前数据为推荐的内容
+    currentData.skillName = recommendation.skill;
+    currentData.knowledgeName = recommendation.knowledge_point;
+    currentData.difficulty = recommendation.difficulty; // 保存推荐的难度
+    
+    // 清空之前的状态
+    currentData.knowledgeText = '';
+    currentData.question = '';
+    currentData.referenceAnswer = '';
+    currentData.isIterative = false;
+    currentData.previousWeaknesses = [];
+    currentData.previousStrengths = [];
+    currentData.questionAnswered = false;
+    questionLoaded = false;
+    
+    // 清除可能存在的恢复状态
+    clearCurrentLearning();
+    
+    // 显示推荐理由（可选）
+    if (recommendation.reason) {
+      console.log('推荐理由:', recommendation.reason);
+    }
+    
+    // 加载新知识点
+    await loadKnowledgeContent();
+    await preloadQuestion();
+    
+    // 显示知识点
+    showKnowledgeOnly(false);
+    
+  } catch (error) {
+    console.error('获取推荐失败，使用默认方式:', error);
+    // 失败时降级到原方式
+    initPage();
+  }
+}
+
+async function clearCurrentLearning() {
+  // 调用后端清除当前学习状态
+  try {
+    await fetchWithUserId('/api/current_learning/clear', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    });
+  } catch (error) {
+    // 清除失败没关系，忽略
+  }
 }
 
 function showCompletedPage(lastRecord) {
