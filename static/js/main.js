@@ -1,4 +1,5 @@
 // 产品经理进化论 - 主页面逻辑
+console.log('main.js 已加载');
 
 // 生成/获取用户唯一ID
 function getUserId() {
