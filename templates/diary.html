@@ -93,9 +93,17 @@
             const resultData = JSON.parse(resultDataStr);
 
             try {
+                let userId = localStorage.getItem('pm_evolution_user_id');
+                if (!userId) {
+                    userId = 'default_user';
+                }
+                
                 const resp = await fetch('/api/submit', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Id': userId
+                    },
                     body: JSON.stringify({
                         skill_name: resultData.skill_name,
                         knowledge_name: resultData.knowledge_name,
@@ -157,10 +165,50 @@
             document.getElementById('main-content').innerHTML = content;
         }
 
-        function learnMore() {
-            sessionStorage.removeItem('evalData');
-            sessionStorage.removeItem('resultData');
-            window.location.href = '/';
+        async function learnMore() {
+            // 调用LLM推荐接口获取下一个知识点
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `
+                <div class="card fade-in">
+                    <div class="card-content">
+                        <div class="loading" style="justify-content: center; padding: 3rem 0;">
+                            <div class="spinner"></div>
+                            <span>正在为你推荐下一个知识点...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                // 获取用户ID
+                let userId = localStorage.getItem('pm_evolution_user_id');
+                if (!userId) {
+                    userId = 'default_user';
+                }
+                
+                const resp = await fetch('/api/next_recommendation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Id': userId
+                    }
+                });
+                const recommendation = await resp.json();
+                
+                // 保存推荐结果到sessionStorage，供首页使用
+                sessionStorage.setItem('nextRecommendation', JSON.stringify(recommendation));
+                
+                // 清除旧数据并跳转
+                sessionStorage.removeItem('evalData');
+                sessionStorage.removeItem('resultData');
+                window.location.href = '/';
+            } catch (error) {
+                console.error('获取推荐失败:', error);
+                // 失败时直接跳转首页
+                sessionStorage.removeItem('evalData');
+                sessionStorage.removeItem('resultData');
+                window.location.href = '/';
+            }
         }
 
         function showError(message) {
