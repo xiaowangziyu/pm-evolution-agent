@@ -588,6 +588,7 @@ async function completeLearning() {
 
 async function learnMore() {
   // 调用 LLM 推荐接口获取下一个知识点
+  console.log('learnMore() 被调用了');
   const mainContent = document.getElementById('main-content');
   mainContent.innerHTML = `
     <div class="card fade-in">
@@ -601,11 +602,14 @@ async function learnMore() {
   `;
   
   try {
+    console.log('开始调用 /api/next_recommendation');
     const resp = await fetchWithUserId('/api/next_recommendation', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'}
     });
+    console.log('/api/next_recommendation 响应状态:', resp.status);
     const recommendation = await resp.json();
+    console.log('/api/next_recommendation 响应内容:', recommendation);
     
     // 更新当前数据为推荐的内容
     currentData.skillName = recommendation.skill;
