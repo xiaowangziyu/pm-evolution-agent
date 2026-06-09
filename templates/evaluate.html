@@ -74,7 +74,7 @@
         });
 
         async function evaluateAnswer() {
-            const evalDataStr = sessionStorage.getItem('evalData');
+            const evalDataStr = localStorage.getItem('evalData');
             if (!evalDataStr) {
                 showError('未找到评估数据，请返回首页重新开始');
                 return;
@@ -103,7 +103,7 @@
                     summary: data.summary || ''
                 };
 
-                sessionStorage.setItem('resultData', JSON.stringify(resultData));
+                localStorage.setItem('resultData', JSON.stringify(resultData));
 
                 displayResult(data);
             } catch (error) {

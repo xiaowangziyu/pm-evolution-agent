@@ -67,7 +67,7 @@ async function initPage() {
 
   try {
     // 检查是否有来自日记页的推荐结果
-    const nextRecommendationStr = sessionStorage.getItem('nextRecommendation');
+    const nextRecommendationStr = localStorage.getItem('nextRecommendation');
     
     if (nextRecommendationStr) {
       // 使用推荐的知识点
@@ -88,7 +88,7 @@ async function initPage() {
       currentData.questionAnswered = false;
       
       // 清除推荐缓存
-      sessionStorage.removeItem('nextRecommendation');
+      localStorage.removeItem('nextRecommendation');
       
       // 加载新知识点
       await Promise.all([
@@ -330,8 +330,8 @@ async function submitAnswer() {
     currentData.weaknesses = data.weaknesses || [];
     currentData.summary = data.summary || '';
     
-    // 保存评估数据到sessionStorage
-    sessionStorage.setItem('evalData', JSON.stringify({
+    // 保存评估数据到localStorage
+    localStorage.setItem('evalData', JSON.stringify({
       skill_name: currentData.skillName,
       knowledge_name: currentData.knowledgeName,
       score: currentData.score,

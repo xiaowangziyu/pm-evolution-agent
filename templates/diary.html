@@ -84,7 +84,7 @@
         }
 
         async function generateDiary() {
-            const resultDataStr = sessionStorage.getItem('resultData');
+            const resultDataStr = localStorage.getItem('resultData');
             if (!resultDataStr) {
                 showError('未找到学习数据，请返回首页重新开始');
                 return;
@@ -195,18 +195,18 @@
                 });
                 const recommendation = await resp.json();
                 
-                // 保存推荐结果到sessionStorage，供首页使用
-                sessionStorage.setItem('nextRecommendation', JSON.stringify(recommendation));
+                // 保存推荐结果到localStorage，供首页使用
+                localStorage.setItem('nextRecommendation', JSON.stringify(recommendation));
                 
                 // 清除旧数据并跳转
-                sessionStorage.removeItem('evalData');
-                sessionStorage.removeItem('resultData');
+                localStorage.removeItem('evalData');
+                localStorage.removeItem('resultData');
                 window.location.href = '/';
             } catch (error) {
                 console.error('获取推荐失败:', error);
                 // 失败时直接跳转首页
-                sessionStorage.removeItem('evalData');
-                sessionStorage.removeItem('resultData');
+                localStorage.removeItem('evalData');
+                localStorage.removeItem('resultData');
                 window.location.href = '/';
             }
         }
@@ -230,8 +230,8 @@
         }
 
         function goHome() {
-            sessionStorage.removeItem('evalData');
-            sessionStorage.removeItem('resultData');
+            localStorage.removeItem('evalData');
+            localStorage.removeItem('resultData');
             window.location.href = '/';
         }
     </script>
