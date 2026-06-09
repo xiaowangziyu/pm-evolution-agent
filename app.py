@@ -454,15 +454,27 @@ def get_knowledge():
     kb = load_knowledge_base()
     kp_content = None
     kp_description = None
-    
-    for skill in kb.get("skills", []):
-        if skill["name"] == skill_name:
+
+    # 如果 skill_name 为空，从 knowledge_points 中反查
+    if not skill_name:
+        for skill in kb.get("skills", []):
             for kp in skill.get("knowledge_points", []):
                 if kp["name"] == kp_name:
+                    skill_name = skill["name"]
                     kp_content = kp.get("content")
                     kp_description = kp.get("description")
                     break
-            break
+            if kp_content is not None:
+                break
+    else:
+        for skill in kb.get("skills", []):
+            if skill["name"] == skill_name:
+                for kp in skill.get("knowledge_points", []):
+                    if kp["name"] == kp_name:
+                        kp_content = kp.get("content")
+                        kp_description = kp.get("description")
+                        break
+                break
 
     # 构建提示词
     context_str = ""
@@ -507,7 +519,7 @@ def get_knowledge():
         "today_count": today_count
     }, user_id)
 
-    return jsonify({"text": text, "is_iterative": is_iterative})
+    return jsonify({"text": text, "is_iterative": is_iterative, "skill_name": skill_name})
 
 
 @app.route("/api/custom_knowledge", methods=["POST"])
@@ -576,15 +588,27 @@ def get_question():
     kb = load_knowledge_base()
     kp_content = None
     kp_description = None
-    
-    for skill in kb.get("skills", []):
-        if skill["name"] == skill_name:
+
+    # 如果 skill_name 为空，从 knowledge_points 中反查
+    if not skill_name:
+        for skill in kb.get("skills", []):
             for kp in skill.get("knowledge_points", []):
                 if kp["name"] == kp_name:
+                    skill_name = skill["name"]
                     kp_content = kp.get("content")
                     kp_description = kp.get("description")
                     break
-            break
+            if kp_content is not None:
+                break
+    else:
+        for skill in kb.get("skills", []):
+            if skill["name"] == skill_name:
+                for kp in skill.get("knowledge_points", []):
+                    if kp["name"] == kp_name:
+                        kp_content = kp.get("content")
+                        kp_description = kp.get("description")
+                        break
+                break
 
     # 构建提示词
     context_str = ""
@@ -682,9 +706,9 @@ def evaluate_answer():
         score = float(num_match.group(1)) if num_match else 5.0
     score = max(0, min(10, score))
 
-    # 提取总结
+    # 提取总结（匹配到"达标之处"或"不足之处"之前的所有内容）
     summary = ""
-    summary_match = re.search(r'总结[：:]\s*([^达标之处\n]+)', eval_text)
+    summary_match = re.search(r'总结[：:]\s*(.*?)(?=\s*达标之处|\s*不足之处|\s*建议|\s*$)', eval_text, re.DOTALL)
     if summary_match:
         summary = summary_match.group(1).strip()
 
@@ -701,10 +725,15 @@ def evaluate_answer():
     if weaknesses_match:
         weaknesses = [line.strip(' -*') for line in weaknesses_match.group(1).strip().split('\n') if line.strip()]
 
-    # 提取建议
-    suggestion_match = re.search(r'建议[：:]\s*([^\n]+)', eval_text)
+    # 提取建议（匹配多行）
+    suggestion_match = re.search(r'建议[：:]\s*(.+?)(?=\s*(?:总结|达标之处|不足之处|$))', eval_text, re.DOTALL)
     if suggestion_match:
         suggestions = suggestion_match.group(1).strip()
+    else:
+        # 回退：如果没有找到明确的结束标记，则匹配到文本末尾
+        suggestion_match = re.search(r'建议[：:]\s*(.+)', eval_text, re.DOTALL)
+        if suggestion_match:
+            suggestions = suggestion_match.group(1).strip()
 
     # 保存评估结果到当前学习状态
     current_data = load_current_learning(user_id) or {}
@@ -743,6 +772,16 @@ def submit_learning():
 
     # 更新进度值
     kb = load_user_knowledge_base(user_id)
+    # 如果 skill_name 为空，从 knowledge_points 中反查
+    if not skill_name:
+        for skill in kb["skills"]:
+            for kp in skill["knowledge_points"]:
+                if kp["name"] == knowledge_name:
+                    skill_name = skill["name"]
+                    break
+            if skill_name:
+                break
+
     for skill in kb["skills"]:
         if skill["name"] == skill_name:
             for kp in skill["knowledge_points"]:

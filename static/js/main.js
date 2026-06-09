@@ -111,7 +111,8 @@ async function preloadQuestion() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        knowledge_name: currentData.knowledgeName
+        knowledge_name: currentData.knowledgeName,
+        skill_name: currentData.skillName
       })
     });
     const data = await resp.json();
@@ -248,11 +249,16 @@ async function submitAnswer() {
     currentData.summary = data.summary || '';
     currentData.suggestions = data.suggestions || '';
 
-    // 从eval_text中提取建议（兼容旧格式）
+    // 从eval_text中提取建议（兼容旧格式，支持多行）
     if (!currentData.suggestions && currentData.evalText) {
-      const suggestionMatch = currentData.evalText.match(/建议[：:]\s*([^。\n]+)/);
+      const suggestionMatch = currentData.evalText.match(/建议[：:]\s*([\s\S]+?)(?=\s*(?:总结|达标之处|不足之处))/);
       if (suggestionMatch) {
         currentData.suggestions = suggestionMatch[1].trim();
+      } else {
+        const fallbackMatch = currentData.evalText.match(/建议[：:]\s*([\s\S]+)/);
+        if (fallbackMatch) {
+          currentData.suggestions = fallbackMatch[1].trim();
+        }
       }
     }
 
@@ -469,11 +475,16 @@ async function loadKnowledgeContent() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        knowledge_name: currentData.knowledgeName
+        knowledge_name: currentData.knowledgeName,
+        skill_name: currentData.skillName
       })
     });
     const data = await resp.json();
-    currentData.knowledgeText = data.knowledge_text || '';
+    currentData.knowledgeText = data.text || '';
+    // 如果后端返回了 skill_name，用它来更新
+    if (data.skill_name && data.skill_name !== currentData.skillName) {
+      currentData.skillName = data.skill_name;
+    }
   } catch (error) {
     console.log('加载知识点失败');
   }
