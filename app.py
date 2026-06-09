@@ -675,9 +675,14 @@ def evaluate_answer():
 
     # 提取总结（匹配到"达标之处"或"不足之处"之前的所有内容）
     summary = ""
-    summary_match = re.search(r'总结[：:]\s*(.*?)(?=\s*达标之处|\s*不足之处|\s*建议|\s*$)', eval_text, re.DOTALL)
+    summary_match = re.search(r'总结[：:]\s*(.+?)(?=\s*达标之处|\s*不足之处|\s*建议|\s*$)', eval_text, re.DOTALL)
     if summary_match:
         summary = summary_match.group(1).strip()
+    else:
+        # 回退：如果没有找到明确的结束标记，则匹配到文本末尾
+        summary_match = re.search(r'总结[：:]\s*(.+)', eval_text, re.DOTALL)
+        if summary_match:
+            summary = summary_match.group(1).strip()
 
     # 提取达标之处和不足之处
     strengths = []
