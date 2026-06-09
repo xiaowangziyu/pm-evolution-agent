@@ -43,13 +43,21 @@ let currentStep = 1;
 function setStep(step) {
   currentStep = step;
   const steps = document.querySelectorAll('.step-item');
-  const lines = document.querySelectorAll('.step-line');
+  
   steps.forEach((s, i) => {
-    if (i + 1 <= step) {
+    // 移除所有类
+    s.classList.remove('active');
+    s.classList.remove('completed');
+    
+    // 根据步骤添加对应类
+    if (i + 1 < step) {
+      // 已完成的步骤
       s.classList.add('completed');
-    } else {
-      s.classList.remove('completed');
+    } else if (i + 1 === step) {
+      // 当前步骤
+      s.classList.add('active');
     }
+    // 未到达的步骤不添加任何类
   });
 }
 
