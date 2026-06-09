@@ -538,57 +538,6 @@ def get_knowledge():
     return jsonify({"text": text, "is_iterative": is_iterative, "skill_name": skill_name})
 
 
-@app.route("/api/custom_knowledge", methods=["POST"])
-def get_custom_knowledge():
-    """生成迭代知识点（新知识点）"""
-    data = request.get_json()
-    kp_name = data.get("knowledge_name", "")
-    previous_weaknesses = data.get("previous_weaknesses", [])
-    original_explanation = data.get("original_explanation", "")
-
-    if previous_weaknesses:
-        weaknesses_str = "、".join(previous_weaknesses)
-        prompt = (
-            f"原知识点讲解：{original_explanation}\n\n"
-            f"用户之前学习「{kp_name}」时存在这些不足：{weaknesses_str}。"
-            f"请结合原知识点讲解，针对这些不足之处，生成一个新的知识点名称和对应的讲解内容。"
-            f"新知识点应该是在原知识点基础上的深化或扩展，重点弥补用户的不足。"
-            f"要求：新知识点名称20字以内，讲解内容300-400字左右，不要首行缩进。"
-            f"输出格式：\n新知识点：[名称]\n讲解内容：[内容]"
-        )
-        text = call_llm(prompt)
-
-        # 解析新知识点名称和讲解内容
-        custom_kp_name = kp_name  # 默认使用原知识点名
-        custom_content = text
-
-        if "新知识点：" in text:
-            parts = text.split("新知识点：", 1)
-            if len(parts) > 1:
-                remaining = parts[1]
-                if "讲解内容：" in remaining:
-                    kp_and_content = remaining.split("讲解内容：", 1)
-                    custom_kp_name = kp_and_content[0].strip()
-                    custom_content = kp_and_content[1].strip()
-                else:
-                    custom_kp_name = remaining.strip()
-        
-        # 去掉首行缩进
-        custom_content = custom_content.strip()
-        if custom_content.startswith('  ') or custom_content.startswith('　　'):
-            custom_content = custom_content.lstrip()
-
-        return jsonify({
-            "custom_kp_name": custom_kp_name,
-            "custom_content": custom_content
-        })
-    else:
-        return jsonify({
-            "custom_kp_name": kp_name,
-            "custom_content": original_explanation
-        })
-
-
 @app.route("/api/question", methods=["POST"])
 def get_question():
     """生成练习题"""
