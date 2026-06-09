@@ -330,8 +330,8 @@ async function submitAnswer() {
     currentData.weaknesses = data.weaknesses || [];
     currentData.summary = data.summary || '';
     
-    // 保存评估数据到localStorage
-    localStorage.setItem('evalData', JSON.stringify({
+    // 保存评估数据到localStorage（key: resultData）
+    localStorage.setItem('resultData', JSON.stringify({
       skill_name: currentData.skillName,
       knowledge_name: currentData.knowledgeName,
       score: currentData.score,
