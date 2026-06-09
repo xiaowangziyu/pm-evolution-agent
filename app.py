@@ -691,6 +691,7 @@ def evaluate_answer():
     # 提取达标之处和不足之处
     strengths = []
     weaknesses = []
+    suggestions = ""
 
     strengths_match = re.search(r'达标之处[：:]\s*\n((?:[-*]\s*.+\n?)*)', eval_text)
     if strengths_match:
@@ -700,6 +701,11 @@ def evaluate_answer():
     if weaknesses_match:
         weaknesses = [line.strip(' -*') for line in weaknesses_match.group(1).strip().split('\n') if line.strip()]
 
+    # 提取建议
+    suggestion_match = re.search(r'建议[：:]\s*([^\n]+)', eval_text)
+    if suggestion_match:
+        suggestions = suggestion_match.group(1).strip()
+
     # 保存评估结果到当前学习状态
     current_data = load_current_learning(user_id) or {}
     current_data["score"] = score
@@ -707,6 +713,7 @@ def evaluate_answer():
     current_data["strengths"] = strengths
     current_data["weaknesses"] = weaknesses
     current_data["summary"] = summary
+    current_data["suggestions"] = suggestions
     save_current_learning(current_data, user_id)
 
     return jsonify({
@@ -714,7 +721,8 @@ def evaluate_answer():
         "score": score,
         "strengths": strengths,
         "weaknesses": weaknesses,
-        "summary": summary
+        "summary": summary,
+        "suggestions": suggestions
     })
 
 

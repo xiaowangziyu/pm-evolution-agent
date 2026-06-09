@@ -34,6 +34,7 @@ let currentData = {
   strengths: [],
   weaknesses: [],
   summary: '',
+  suggestions: '',
   todayCount: 0
 };
 
@@ -126,6 +127,10 @@ function showKnowledgeSection() {
   setStep(1);
 
   const mainContent = document.getElementById('main-content');
+  
+  // 检查是否有知识点内容，如果没有则显示加载状态并尝试加载
+  const hasContent = currentData.knowledgeText && currentData.knowledgeText.length > 0;
+  
   mainContent.innerHTML = `
     <div class="card fade-in">
       <div class="card-title">
@@ -137,7 +142,7 @@ function showKnowledgeSection() {
           <strong>知识点：</strong> ${currentData.knowledgeName}
         </div>
         <div id="knowledge-content" style="white-space: pre-wrap; line-height: 1.8;">
-          ${currentData.knowledgeText || '正在加载知识点内容...'}
+          ${hasContent ? currentData.knowledgeText : '<div class="loading"><div class="spinner"></div><span>正在加载知识点内容...</span></div>'}
         </div>
       </div>
     </div>
@@ -147,6 +152,16 @@ function showKnowledgeSection() {
       </button>
     </div>
   `;
+
+  // 如果没有知识点内容，尝试加载
+  if (!hasContent && currentData.knowledgeName) {
+    loadKnowledgeContent().then(() => {
+      const contentEl = document.getElementById('knowledge-content');
+      if (contentEl && currentData.knowledgeText) {
+        contentEl.innerHTML = currentData.knowledgeText;
+      }
+    });
+  }
 }
 
 // 显示练习题
@@ -167,7 +182,10 @@ function showQuizSection() {
         <textarea id="user-answer" placeholder="请在此写下你的回答..." style="width: 100%; min-height: 150px; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; resize: vertical;"></textarea>
       </div>
     </div>
-    <div style="text-align: center; margin: 1rem 0;">
+    <div style="display: flex; gap: 1rem; justify-content: center; margin: 1rem 0;">
+      <button class="btn btn-secondary" onclick="showKnowledgeSection()">
+        返回知识点
+      </button>
       <button class="btn btn-primary" onclick="submitAnswer()">
         提交答案
       </button>
@@ -228,6 +246,15 @@ async function submitAnswer() {
     currentData.strengths = data.strengths || [];
     currentData.weaknesses = data.weaknesses || [];
     currentData.summary = data.summary || '';
+    currentData.suggestions = data.suggestions || '';
+
+    // 从eval_text中提取建议（兼容旧格式）
+    if (!currentData.suggestions && currentData.evalText) {
+      const suggestionMatch = currentData.evalText.match(/建议[：:]\s*([^。\n]+)/);
+      if (suggestionMatch) {
+        currentData.suggestions = suggestionMatch[1].trim();
+      }
+    }
 
     // 直接显示评估结果（不跳转）
     showEvaluationResult();
@@ -271,14 +298,39 @@ function showEvaluationResult() {
             </ul>
           </div>
         ` : ''}
+        ${currentData.suggestions ? `
+          <div style="padding: 1rem; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+            <strong>🎯 建议：</strong>${currentData.suggestions}
+          </div>
+        ` : ''}
+        <div id="reference-answer-container" style="display: none; margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+          <strong>📝 AI参考答案：</strong>
+          <div style="margin-top: 0.75rem; line-height: 1.8;">${currentData.referenceAnswer || '暂无参考答案'}</div>
+        </div>
       </div>
       <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem;">
+        <button class="btn btn-secondary" onclick="toggleReferenceAnswer()">
+          查看AI答案
+        </button>
         <button class="btn btn-primary" onclick="generateDiary()">
           生成学习日记
         </button>
       </div>
     </div>
   `;
+}
+
+// 切换显示/隐藏参考答案
+function toggleReferenceAnswer() {
+  const container = document.getElementById('reference-answer-container');
+  const button = document.querySelector('.btn-secondary');
+  if (container.style.display === 'none' || container.style.display === '') {
+    container.style.display = 'block';
+    button.textContent = '隐藏AI答案';
+  } else {
+    container.style.display = 'none';
+    button.textContent = '查看AI答案';
+  }
 }
 
 // 生成学习日记
