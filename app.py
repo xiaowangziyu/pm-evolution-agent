@@ -388,22 +388,28 @@ def get_today():
 
     # 检查是否有正在进行的知识点（用户刷新页面时恢复）
     current_learning = load_current_learning(user_id)
-    if current_learning:
+    # 验证 current_learning 是否有效（旧版本可能缺少关键字段）
+    is_valid_current = (
+        current_learning is not None
+        and current_learning.get("skill_name")
+        and current_learning.get("knowledge_name")
+    )
+    if is_valid_current:
         # 有正在进行的知识点，返回它（不重新生成）
         return jsonify({
             "status": "in_progress",
             "skill_name": current_learning["skill_name"],
-            "skill_consecutive_days": current_learning["skill_consecutive_days"],
+            "skill_consecutive_days": current_learning.get("skill_consecutive_days", 0),
             "knowledge_name": current_learning["knowledge_name"],
-            "knowledge_progress": current_learning["knowledge_progress"],
-            "knowledge_text": current_learning.get("knowledge_text"),  # 返回保存的知识点详解
-            "is_iterative": current_learning.get("is_iterative", False),  # 返回是否为迭代学习
+            "knowledge_progress": current_learning.get("knowledge_progress", 0),
+            "knowledge_text": current_learning.get("knowledge_text"),
+            "is_iterative": current_learning.get("is_iterative", False),
             "previous_weaknesses": current_learning.get("previous_weaknesses", []),
             "previous_strengths": current_learning.get("previous_strengths", []),
             "today_count": current_learning.get("today_count", 0),
-            "is_resumed": True,  # 标记为恢复的进度
-            "question": current_learning.get("question"),  # 返回缓存的练习题
-            "question_answered": current_learning.get("question_answered", False)  # 返回练习题是否已回答
+            "is_resumed": True,
+            "question": current_learning.get("question"),
+            "question_answered": current_learning.get("question_answered", False)
         })
 
     # 没有正在进行的知识点，获取新知识点
@@ -419,10 +425,20 @@ def get_today():
         if r["knowledge"] == kp["name"] and r.get("weaknesses")
     ]
 
-    # 获取上次的strengths
     previous_strengths = []
     if previous_records:
         previous_strengths = previous_records[-1].get("strengths", [])
+
+    # 保存一份当前学习状态快照，用于页面刷新后恢复
+    save_current_learning({
+        "skill_name": skill["name"],
+        "skill_consecutive_days": skill["consecutive_days"],
+        "knowledge_name": kp["name"],
+        "knowledge_progress": kp["progress"],
+        "today_count": today_count,
+        "previous_weaknesses": previous_records[-1]["weaknesses"] if previous_records else [],
+        "previous_strengths": previous_strengths
+    }, user_id)
 
     return jsonify({
         "status": "ready",
@@ -433,7 +449,7 @@ def get_today():
         "previous_weaknesses": previous_records[-1]["weaknesses"] if previous_records else [],
         "previous_strengths": previous_strengths,
         "today_count": today_count,
-        "is_resumed": False  # 新知识点
+        "is_resumed": False
     })
 
 
