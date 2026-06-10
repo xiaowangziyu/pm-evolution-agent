@@ -238,9 +238,10 @@ def load_user_knowledge_base(user_id):
         else:
             skill["consecutive_days"] = 0
         
-        # 更新每个知识点的进度
+        # 更新每个知识点的进度（确保每个知识点都有 progress 字段）
         for kp in skill["knowledge_points"]:
             kp_name = kp["name"]
+            kp["progress"] = 0  # 默认进度为 0
             if skill_name in user_progress:
                 for user_kp in user_progress[skill_name]["knowledge_points"]:
                     if user_kp["name"] == kp_name:

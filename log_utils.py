@@ -16,23 +16,24 @@ def redact_sensitive(value, max_length=50):
         max_length: 最大显示长度（超过则截断）
     
     Returns:
-        脱敏后的字符串
+        脱敏后的值（保留原始类型）
     """
     if value is None:
         return "None"
     
-    value_str = str(value)
-    
     # 检查是否为敏感字段值
+    value_str = str(value)
     for field in SENSITIVE_FIELDS:
         if field.lower() in value_str.lower() or "key" in value_str.lower():
             return "[REDACTED]"
     
-    # 截断过长的内容（如用户答案、长文本）
-    if len(value_str) > max_length:
-        return value_str[:max_length] + "..."
+    # 对于字符串类型，截断过长的内容
+    if isinstance(value, str):
+        if len(value) > max_length:
+            return value[:max_length] + "..."
     
-    return value_str
+    # 保留原始类型（整数、浮点数等）
+    return value
 
 def safe_log(message, *args, level='info'):
     """
