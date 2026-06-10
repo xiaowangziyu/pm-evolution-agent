@@ -40,11 +40,15 @@ app = Flask(__name__)
 # 导入数据库模块
 import db
 
-# 添加请求日志中间件
+# 导入提示词配置和日志工具
+import prompts
+from log_utils import safe_log, format_user_data
+
+# 添加请求日志中间件（脱敏处理）
 @app.before_request
 def log_request_info():
     user_id = get_user_id()
-    logger.info(f"Request: {request.method} {request.path} | User: {user_id}")
+    safe_log("Request: %s %s | User: %s", request.method, request.path, user_id)
 
 # ==================== 全局错误处理 ====================
 import traceback
@@ -69,7 +73,7 @@ def handle_all_errors(e):
 # ==================== 工具函数 ====================
 def call_llm(prompt, temperature=0.7):
     """调用智谱AI大模型"""
-    logger.info(f"Calling LLM, prompt length: {len(prompt)}, temperature: {temperature}")
+    safe_log("Calling LLM, prompt length: %s, temperature: %s", len(prompt), str(temperature))
     if not API_KEY:
         # 演示模式：返回模拟内容
         if "讲解" in prompt or "知识点" in prompt:
@@ -171,12 +175,12 @@ def call_llm(prompt, temperature=0.7):
             return resp.json()["choices"][0]["message"]["content"]
         except requests.exceptions.Timeout:
             if attempt < max_retries - 1:
-                print(f"API调用超时，正在重试 ({attempt + 1}/{max_retries})...")
+                safe_log("API调用超时，正在重试 (%s/%s)...", attempt + 1, max_retries, level='warning')
                 continue
             return "❌ API调用超时，请检查网络连接后重试"
         except requests.exceptions.ConnectionError as e:
             if attempt < max_retries - 1:
-                print(f"API连接失败，正在重试 ({attempt + 1}/{max_retries})...")
+                safe_log("API连接失败，正在重试 (%s/%s)...", attempt + 1, max_retries, level='warning')
                 continue
             return f"❌ API连接失败，请检查网络设置"
         except Exception as e:
@@ -535,17 +539,17 @@ def get_knowledge():
         # 有历史记录，迭代学习
         weaknesses_str = "、".join(previous_weaknesses)
         strengths_str = "、".join(previous_strengths) if previous_strengths else "基本概念"
-        prompt = (
-            f"你是一位资深产品经理导师。用户之前学习「{kp_name}」时存在这些不足：{weaknesses_str}，但{strengths_str}已掌握。"
-            f"请肯定用户已掌握的部分，并针对不足之处，重新深入讲解该知识点，重点弥补不足。"
-            f"注意：不要简单重复第一次的讲解内容，而是重点弥补不足，可以扩展举例、纠正错误认知或引入更深层次的原理。保持专业、准确。"
-            f"要求：400-500字左右，可以举例说明。{context_str}"
+        prompt = prompts.PROMPT_EXPLAIN_ITERATIVE.format(
+            kp_name=kp_name,
+            weaknesses_str=weaknesses_str,
+            strengths_str=strengths_str,
+            context_str=context_str
         )
     else:
         # 首次学习
-        prompt = (
-            f"你是一位资深产品经理导师，请用通俗易懂的语言，深入浅出地讲解以下知识点：{kp_name}。"
-            f"要求：300-400字左右，可以举例说明。{context_str}"
+        prompt = prompts.PROMPT_EXPLAIN_FIRST.format(
+            kp_name=kp_name,
+            context_str=context_str
         )
     text = call_llm(prompt)
     is_iterative = bool(previous_weaknesses)
@@ -626,15 +630,18 @@ def get_question():
     if previous_weaknesses:
         # 有历史记录，迭代学习
         weaknesses_str = "、".join(previous_weaknesses)
-        prompt = (
-            f"基于知识点「{kp_name}」和不足{weaknesses_str}，请出一道更有挑战性的产品经理{difficulty_str}，并提供参考答案。"
-            f"输出格式：\n题目：\n参考答案：{context_str}"
+        prompt = prompts.PROMPT_QUESTION_ITERATIVE.format(
+            kp_name=kp_name,
+            weaknesses_str=weaknesses_str,
+            difficulty_str=difficulty_str,
+            context_str=context_str
         )
     else:
         # 首次学习
-        prompt = (
-            f"基于知识点「{kp_name}」，请出一道产品经理{difficulty_str}，并提供参考答案。"
-            f"输出格式：\n题目：\n参考答案：{context_str}"
+        prompt = prompts.PROMPT_QUESTION_FIRST.format(
+            kp_name=kp_name,
+            difficulty_str=difficulty_str,
+            context_str=context_str
         )
     text = call_llm(prompt)
 
@@ -671,28 +678,11 @@ def evaluate_answer():
     user_answer = data.get("user_answer", "")
     reference = data.get("reference", "")
 
-    prompt = f"""题目：{question}
-用户答案：{user_answer}
-参考答案（供参考）：{reference}
-
-请给用户的答案打分（0-10分），并按要求输出：
-1. 总结：对达标之处和不足之处进行综合总结（100-150字）
-2. 达标之处：3-5个要点，提取用户回答中的共同优点
-3. 不足之处：3-5个要点，提取用户回答中的共同不足
-4. 建议：针对不足之处给出具体、可操作的改进建议（50-100字）
-
-输出格式：
-总结：...
-
-达标之处：
-- ...
-- ...
-- ...
-不足之处：
-- ...
-- ...
-- ...
-建议：..."""
+    prompt = prompts.PROMPT_EVALUATE.format(
+        question=question,
+        user_answer=user_answer,
+        reference=reference
+    )
     eval_text = call_llm(prompt)
 
     # 提取得分
@@ -772,7 +762,7 @@ def submit_learning():
     strengths = data.get("strengths", [])
     weaknesses = data.get("weaknesses", [])
     
-    logger.info(f"User {user_id} submitted learning: {knowledge_name}, score: {score}")
+    safe_log("User %s submitted learning: %s, score: %s", user_id, knowledge_name, score)
 
     # 更新进度值
     kb = load_user_knowledge_base(user_id)
@@ -796,21 +786,13 @@ def submit_learning():
     save_user_knowledge_base(kb, user_id)
 
     # 生成日记
-    prompt = f"""基于以下信息写一篇详细的学习日记（第一人称，200-300字）
-- 今日学习知识点：{knowledge_name}
-- 今日总结：{summary if summary else eval_text[:200]}
-- 得分：{score}/10
-- 今日达标之处：{'、'.join(strengths) if strengths else '无'}
-- 今日不足之处：{'、'.join(weaknesses) if weaknesses else '无'}
-
-要求：
-1. 开头记录今天的学习心情和状态
-2. 描述对知识点的理解和收获
-3. 结合达标之处和不足之处分析本次学习
-4. 写下后续学习的计划和目标
-5. 结尾鼓励自己继续加油
-
-日记内容："""
+    prompt = prompts.PROMPT_DIARY.format(
+        knowledge_name=knowledge_name,
+        summary=summary if summary else eval_text[:200],
+        score=score,
+        strengths='、'.join(strengths) if strengths else '无',
+        weaknesses='、'.join(weaknesses) if weaknesses else '无'
+    )
     diary = call_llm(prompt)
 
     # 记录历史
@@ -937,37 +919,15 @@ def next_recommendation():
     available_text = "\n".join(available_knowledge)
     
     # 4. 构建提示词
-    prompt = f"""你是一位资深产品经理导师。
-
-当前用户各技能进度：
-{progress_text}
-
-可用的技能和知识点列表（必须从下面选择）：
-{available_text}
-
-用户最近5次学习记录（最新在前）：
-{format_history(recent_history)}
-
-要求：
-1. 仅从「可用的技能和知识点列表」中选择，绝对不要推荐不存在的！
-2. 推荐原则：
-   - 存在进度值为0的知识点时，优先从中随机选择一个推荐（可考虑知识点之间的依赖和关联性）
-   - 所有知识点的进度>0时，优先推荐进度最低的知识点，如果上一次学习的知识点恰好是当前进度最低，则推荐进度第二低的（除非只有这一个知识点）。偶尔（约20%）可以推荐其他进度较低的知识点，保持学习广度
-3. 难度选择标准：
-   - 容易：该知识点进度 < 50%
-   - 中等：50-80%
-   - 困难：> 80%
-4. 请按以下 JSON 格式输出，不要任何其他内容：
-{{
-    "skill": "技能名",
-    "knowledge_point": "知识点名",
-    "difficulty": "容易/中等/困难",
-    "reason": "简短理由"
-}}"""
+    prompt = prompts.PROMPT_RECOMMENDATION.format(
+        progress_text=progress_text,
+        available_text=available_text,
+        recent_history=format_history(recent_history)
+    )
     
     # 5. 调用 LLM（低温度）
     try:
-        logger.info(f"Calling LLM for next recommendation for user {user_id}")
+        safe_log("Calling LLM for next recommendation for user %s", user_id)
         response = call_llm(prompt, temperature=0.3)
         
         # 6. 清理响应中的 markdown 标记
@@ -978,7 +938,7 @@ def next_recommendation():
         if not validate_recommendation(kb, recommendation):
             raise ValueError(f"推荐的内容不在知识库中: {recommendation}")
         
-        logger.info(f"LLM recommendation successful: {recommendation}")
+        safe_log("LLM recommendation successful: %s", recommendation)
     except Exception as e:
         # Fallback：使用原硬编码规则
         logger.warning(f"LLM recommendation failed: {e}, falling back to hardcoded rules")
@@ -996,7 +956,7 @@ def next_recommendation():
             "difficulty": difficulty,
             "reason": f"使用默认规则（LLM返回异常）"
         }
-        logger.info(f"Fallback recommendation: {recommendation}")
+        safe_log("Fallback recommendation: %s", recommendation)
     
     return jsonify(recommendation)
 
