@@ -37,11 +37,34 @@ LOG_PATH = os.path.join(BASE_DIR, "learning_log.json")
 
 app = Flask(__name__)
 
+# 导入数据库模块
+import db
+
 # 添加请求日志中间件
 @app.before_request
 def log_request_info():
     user_id = get_user_id()
     logger.info(f"Request: {request.method} {request.path} | User: {user_id}")
+
+# ==================== 全局错误处理 ====================
+import traceback
+
+@app.errorhandler(Exception)
+def handle_all_errors(e):
+    """全局异常处理器：捕获所有未处理的异常并记录到 error.log"""
+    error_log_path = os.path.join(LOG_DIR, "error.log")
+    error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ERROR\n"
+    error_msg += f"User: {request.headers.get('X-User-Id', 'unknown')}\n"
+    error_msg += f"Request: {request.method} {request.path}\n"
+    error_msg += f"Error: {str(e)}\n"
+    error_msg += f"Traceback:\n{traceback.format_exc()}\n"
+    error_msg += "="*80 + "\n"
+    
+    with open(error_log_path, "a", encoding="utf-8") as f:
+        f.write(error_msg)
+    
+    logger.error(f"Exception: {str(e)} | Path: {request.path}")
+    return jsonify({"status": "error", "message": "服务器内部错误，请稍后重试"}), 500
 
 # ==================== 工具函数 ====================
 def call_llm(prompt, temperature=0.7):
@@ -170,108 +193,117 @@ def get_user_id():
 
 
 def load_knowledge_base():
-    """加载原始知识库（只读）"""
-    with open(KB_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """加载知识库（从 SQLite）"""
+    skills = db.get_all_skills()
+    
+    # 如果数据库中没有数据，从 JSON 文件导入
+    if not skills:
+        with open(KB_PATH, "r", encoding="utf-8") as f:
+            kb_data = json.load(f)
+        
+        # 同步到数据库
+        for skill in kb_data.get("skills", []):
+            db.add_skill(skill.get("name"), skill.get("description", ""))
+            for kp in skill.get("knowledge_points", []):
+                db.add_knowledge_point(
+                    skill_name=skill.get("name"),
+                    name=kp.get("name"),
+                    description=kp.get("description", ""),
+                    content=kp.get("content", "")
+                )
+        
+        skills = db.get_all_skills()
+    
+    return {"skills": skills}
 
 
 def load_user_knowledge_base(user_id):
-    """加载用户的知识库进度（兼容旧数据迁移）"""
-    user_kb_path = os.path.join(BASE_DIR, f"kb_user_{user_id}.json")
-    
-    # 1. 先尝试加载新的用户隔离数据
-    try:
-        with open(user_kb_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        pass
-    
-    # 2. 如果新数据不存在，尝试查找旧的修改后的 knowledge_base.json
-    #（旧版本会直接修改原始 knowledge_base.json 保存进度）
-    # 先检查原始 knowledge_base.json 是否被修改过（有进度数据）
-    original_kb = load_knowledge_base()
-    has_old_progress = any(
-        any(kp.get("progress", 0) > 0 for kp in skill.get("knowledge_points", []))
-        for skill in original_kb.get("skills", [])
-    )
-    
-    if has_old_progress:
-        # 把旧进度迁移到用户新数据文件
-        save_user_knowledge_base(original_kb, user_id)
-        return original_kb
-    
-    # 3. 也没有旧进度数据，返回新的知识库副本
+    """加载用户的知识库进度（从 SQLite）"""
+    # 获取原始知识库结构
     kb = load_knowledge_base()
+    
+    # 从数据库获取用户进度
+    user_progress = db.get_user_progress(user_id)
+    
+    # 将用户进度合并到知识库结构中
     for skill in kb["skills"]:
-        if "consecutive_days" not in skill:
+        skill_name = skill["name"]
+        # 设置连续学习天数
+        if skill_name in user_progress:
+            skill["consecutive_days"] = user_progress[skill_name]["consecutive_days"]
+        else:
             skill["consecutive_days"] = 0
+        
+        # 更新每个知识点的进度
+        for kp in skill["knowledge_points"]:
+            kp_name = kp["name"]
+            if skill_name in user_progress:
+                for user_kp in user_progress[skill_name]["knowledge_points"]:
+                    if user_kp["name"] == kp_name:
+                        kp["progress"] = user_kp["progress"]
+                        break
+    
     return kb
 
 
 def save_user_knowledge_base(kb, user_id):
-    """保存用户的知识库进度"""
-    user_kb_path = os.path.join(BASE_DIR, f"kb_user_{user_id}.json")
-    with open(user_kb_path, "w", encoding="utf-8") as f:
-        json.dump(kb, f, ensure_ascii=False, indent=2)
+    """保存用户的知识库进度（到 SQLite）"""
+    for skill in kb["skills"]:
+        skill_name = skill["name"]
+        consecutive_days = skill.get("consecutive_days", 0)
+        
+        for kp in skill["knowledge_points"]:
+            db.update_user_progress(
+                session_id=user_id,
+                skill_name=skill_name,
+                knowledge_name=kp["name"],
+                progress=kp.get("progress", 0),
+                consecutive_days=consecutive_days
+            )
 
 
 def load_log(user_id):
-    """加载用户的学习记录（兼容旧数据迁移）"""
-    user_log_path = os.path.join(BASE_DIR, f"log_user_{user_id}.json")
-    
-    # 1. 先尝试加载新的用户隔离数据
-    try:
-        with open(user_log_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        pass
-    
-    # 2. 如果新数据不存在，尝试加载旧的 learning_log.json 并迁移
-    old_log_path = os.path.join(BASE_DIR, "learning_log.json")
-    try:
-        with open(old_log_path, "r", encoding="utf-8") as f:
-            old_data = json.load(f)
-            # 迁移到用户新数据文件
-            save_log(old_data, user_id)
-            return old_data
-    except FileNotFoundError:
-        pass
-    
-    # 3. 也没有旧数据，返回新的空数据
-    return {"last_date": None, "history": []}
+    """加载用户的学习记录（从 SQLite）"""
+    return db.get_user_records(user_id)
 
 
 def save_log(log, user_id):
-    """保存用户的学习记录"""
-    user_log_path = os.path.join(BASE_DIR, f"log_user_{user_id}.json")
-    with open(user_log_path, "w", encoding="utf-8") as f:
-        json.dump(log, f, ensure_ascii=False, indent=2)
+    """保存用户的学习记录（到 SQLite）"""
+    # 日志结构: {"last_date": "...", "history": [...]}
+    # 只保存新增的记录（避免重复）
+    if "history" in log:
+        for record in log["history"]:
+            # 检查是否已存在相同记录
+            today = record.get("date")
+            knowledge = record.get("knowledge")
+            existing = db.get_today_records(user_id, today)
+            if not any(r["knowledge"] == knowledge for r in existing):
+                db.add_learning_record(
+                    session_id=user_id,
+                    date=record.get("date"),
+                    skill=record.get("skill"),
+                    knowledge=record.get("knowledge"),
+                    score=record.get("score"),
+                    summary=record.get("summary"),
+                    strengths=record.get("strengths", []),
+                    weaknesses=record.get("weaknesses", []),
+                    diary=record.get("diary")
+                )
 
 
 def load_current_learning(user_id):
-    """加载用户的当前学习状态"""
-    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
-    try:
-        with open(current_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return None
+    """加载用户的当前学习状态（从 SQLite）"""
+    return db.get_current_learning(user_id)
 
 
 def save_current_learning(data, user_id):
-    """保存用户的当前学习状态"""
-    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
-    with open(current_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """保存用户的当前学习状态（到 SQLite）"""
+    db.update_current_learning(user_id, data)
 
 
 def clear_current_learning(user_id):
-    """清除用户的当前学习状态"""
-    current_path = os.path.join(BASE_DIR, f"current_user_{user_id}.json")
-    try:
-        os.remove(current_path)
-    except Exception:
-        pass
+    """清除用户的当前学习状态（从 SQLite）"""
+    db.clear_current_learning(user_id)
 
 
 def recalc_skill_avg(skill):
