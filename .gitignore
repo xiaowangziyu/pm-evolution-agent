@@ -47,3 +47,9 @@ backup/
 
 # pm-skills-source (optional, it's a git submodule)
 pm-skills-source/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
