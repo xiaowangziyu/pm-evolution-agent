@@ -42,6 +42,8 @@ log_user_*.json
 current_user_*.json
 logs/
 *.log
+backup/
+*.db
 
 # pm-skills-source (optional, it's a git submodule)
 pm-skills-source/
